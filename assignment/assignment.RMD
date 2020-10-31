@@ -1,0 +1,198 @@
+---
+title: "ML-assignment"
+author: "Manzar"
+date: "10/18/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment Practical Machine Learning
+<br/>
+
+first load the required libraries. 
+```{r}
+#free up some memory
+rm(list = ls())
+
+#libraries
+
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+set.seed(12345)
+```
+
+
+set the url for the download
+
+
+```{r url for download}
+urltrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+urltest <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+#download
+
+training <- read.csv(url(urltrain))
+testing  <- read.csv(url(urltest))
+
+#create partition for data validation
+
+inTrain <- createDataPartition(training$classe, p=.7, list = FALSE)
+trainset <- training[inTrain,]
+testset <- training[-inTrain,]
+
+dim(trainset); dim(testset)
+```
+
+Data cleaning. Remove variables/columns with near zero values
+
+```{r }
+nzv <- nearZeroVar(trainset)
+trainset <- trainset[, -nzv]
+testset <- testset[, -nzv]
+```
+
+Data cleaning. Remove variables which are mostly NA
+```{r}
+varNA <- sapply(trainset, function(x) mean(is.na(x))) > .95
+trainset <- trainset[, varNA==F]
+testset <- testset[, varNA==F]
+
+```
+
+Remove personal identifiers
+
+```{r}
+trainset <- trainset[, -(1:5)]
+testset  <- testset[, -(1:5)]
+```
+
+## Correlation Analysis
+
+```{r}
+corMatrix <- cor(trainset[, -54])
+corrplot(corMatrix, order = "FPC", method = "color", type = "lower", tl.cex = .6, 
+         tl.col = rgb(0,0,0))
+```
+
+## Prediction Model Building
+
+A) Method: Random Forest
+
+```{r}
+
+#creating model fit
+
+set.seed(12345)
+controlRF <- trainControl(method = "cv", number = 3, verboseIter = FALSE)
+modFitRandForest <- train(classe~., data = trainset, method = "rf", trControl=controlRF)
+modFitRandForest$finalModel
+```
+
+
+```{r}
+#prediction on Test dataset
+
+predictRandomForest <- predict(modFitRandForest, newdata = testset)
+confMatRandForest <- confusionMatrix(predictRandomForest, as.factor(testset$classe))
+confMatRandForest
+```
+```{r}
+#plot matrix results
+
+plot(confMatRandForest$table, col = confMatRandForest$byClass, main = paste("Random Forest - Accuracy =", 
+                                round(confMatRandForest$overall['Accuracy'], 4)))
+
+#table(factor(predictRandomForest, levels=min(testset):max(testset)), 
+  #    factor(testset$classe, levels=min(testset):max(testset)))
+```
+
+
+## Method: Decision Trees
+
+```{r}
+#model fit
+
+set.seed(12345)
+modFitDecTree <- rpart(classe ~ ., data = trainset, method = "class")
+fancyRpartPlot(modFitDecTree)
+```
+
+```{r}
+#prediction of Test dataset
+
+predictDecTree <- predict(modFitDecTree, newdata = testset, type = "class")
+confMatDecTree <- confusionMatrix(predictDecTree, as.factor(testset$classe))
+confMatDecTree
+
+#plot matrix result
+
+plot(confMatDecTree$table, col = confMatDecTree$byClass, main = paste("Decision Tree - Accuracy =",
+                               round(confMatDecTree$overall['Accuracy'], 4)))
+```
+
+## Generalized Boosted Model
+
+```{r}
+# model fit
+
+set.seed(12345)
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modFitGBM  <- train(classe ~ ., data=trainset, method = "gbm",
+                    trControl = controlGBM, verbose = FALSE)
+modFitGBM$finalModel
+```
+```{r}
+# prediction on Test dataset
+predictGBM <- predict(modFitGBM, newdata=testset)
+confMatGBM <- confusionMatrix(predictGBM, as.factor(testset$classe))
+confMatGBM
+```
+
+```{r}
+# plot matrix results
+plot(confMatGBM$table, col = confMatGBM$byClass, 
+     main = paste("GBM - Accuracy =", round(confMatGBM$overall['Accuracy'], 4)))
+```
+
+## Applying the Selected Model to the Test Data
+
+The accuracy of the 3 regression modeling methods above are:
+
+Random Forest : 0.9963
+Decision Tree : 0.7368
+GBM           : 0.9839
+
+
+In that case, the Random Forest model will be applied to predict the 
+20 quiz results (testing dataset) as shown below.
+
+
+```{r}
+predictTEST <- predict(modFitRandForest, newdata=testing)
+predictTEST
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
